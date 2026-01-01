@@ -1,0 +1,59 @@
+import { prisma } from '@/lib/prisma'
+
+export default async function Home() {
+  // 1. Pedimos los productos a la NAS
+  const products = await prisma.product.findMany({
+    orderBy: { category: 'desc' }
+  })
+
+  return (
+    <main className="min-h-screen bg-gray-50 p-8">
+      {/* Título */}
+      <header className="max-w-4xl mx-auto mb-10 text-center">
+        <h1 className="text-4xl font-bold text-gray-900 mb-2">🏰 My Food PWA</h1>
+        <p className="text-gray-600">Del NAS a tu mesa.</p>
+      </header>
+
+      {/* Rejilla de Platos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        {products.map((product) => (
+          <article key={product.id} className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden hover:shadow-lg transition-all">
+            
+            {/* Foto del plato (Usamos placeholder si no hay foto real aun) */}
+            <div className="h-48 bg-gray-200 w-full relative">
+               <img 
+                 src={product.image_url || "https://placehold.co/600x400?text=Sin+Foto"} 
+                 alt={product.name}
+                 className="w-full h-full object-cover"
+               />
+            </div>
+
+            {/* Info del plato */}
+            <div className="p-5">
+              <div className="flex justify-between items-start mb-2">
+                <h2 className="font-bold text-lg text-gray-800">{product.name}</h2>
+                <span className="bg-blue-600 text-white text-sm font-bold px-2 py-1 rounded-md">
+                  {Number(product.price).toFixed(2)} €
+                </span>
+              </div>
+              
+              <p className="text-gray-500 text-sm mb-4 h-10 overflow-hidden">
+                {product.description || "Sin descripción"}
+              </p>
+
+              <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                <span className={`text-xs font-mono px-2 py-1 rounded ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {product.stock > 0 ? `Stock: ${product.stock}` : 'AGOTADO'}
+                </span>
+                
+                <button className="bg-black text-white px-3 py-1.5 rounded-lg text-sm hover:bg-gray-800 transition-colors">
+                  Añadir
+                </button>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </main>
+  )
+}
