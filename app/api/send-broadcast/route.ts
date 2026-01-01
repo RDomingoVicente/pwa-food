@@ -2,68 +2,77 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import webpush from 'web-push'
 
-// 1. Configuración de Supabase (Lectura segura)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-const supabase = createClient(supabaseUrl, supabaseKey)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
-// 2. Configuración de WebPush (Tus llaves)
+// Configurar WebPush con tus claves
 webpush.setVapidDetails(
   process.env.VAPID_SUBJECT || 'mailto:admin@tuapp.com',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
-  process.env.VAPID_PRIVATE_KEY || ''
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+  process.env.VAPID_PRIVATE_KEY!
 )
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { title, message } = body
+    const { title, message, url } = await request.json()
 
-    // Validación básica
-    if (!title || !message) {
-      return NextResponse.json({ error: "Falta título o mensaje" }, { status: 400 })
-    }
-
-    console.log(`📢 Iniciando envío masivo: "${title}"`)
-
-    // A. Buscar a todos los suscriptores en Supabase
+    // 1. Obtener todos los suscriptores
     const { data: subscribers, error } = await supabase
       .from('push_subscriptions')
       .select('*')
 
-    if (error) throw error;
-
+    if (error) throw error
     if (!subscribers || subscribers.length === 0) {
-      return NextResponse.json({ message: 'No hay nadie suscrito todavía' })
+        return NextResponse.json({ success: true, count: 0, message: "No hay suscriptores" })
     }
 
-    console.log(`📬 Destinatarios encontrados: ${subscribers.length}`)
+    console.log(`📣 Intentando enviar a ${subscribers.length} usuarios...`)
 
-    // B. Preparar el mensaje
+    // 2. Preparar el mensaje (Payload)
     const payload = JSON.stringify({
-      title: title,
-      body: message,
-      icon: '/icon.png', // Asegúrate de tener un icono o comenta esta línea
-      url: '/' // Para que al hacer clic abran la app
+      title: title || 'Hola',
+      body: message || 'Nuevo mensaje',
+      icon: '/icon.png', // Asegúrate de que esta imagen existe en /public
+      url: url || '/' 
     })
 
-    // C. Enviar a todos en paralelo
-    // Usamos Promise.allSettled para que si falla uno, no se detenga el resto
-    const results = await Promise.allSettled(
-      subscribers.map((sub) => 
-        webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload)
-      )
-    )
+    // 3. Enviar uno a uno (reconstruyendo el objeto keys)
+    const promises = subscribers.map(sub => {
+      
+      // ⚠️ AQUÍ ESTÁ LA MAGIA: Reconstruimos el formato que quiere web-push
+      const pushSubscription = {
+        endpoint: sub.endpoint,
+        keys: {
+          auth: sub.auth,      // Sacamos de la columna plana
+          p256dh: sub.p256dh   // Sacamos de la columna plana
+        }
+      }
 
-    // Contar éxitos
-    const successCount = results.filter(r => r.status === 'fulfilled').length
+      // Enviamos y controlamos errores individuales
+      return webpush.sendNotification(pushSubscription as any, payload)
+        .catch(err => {
+            console.error(`❌ Fallo al enviar a ${sub.id}:`, err.statusCode)
+            // Si el error es 410 (Gone), el usuario ya no existe -> Lo borramos
+            if (err.statusCode === 410 || err.statusCode === 404) {
+                console.log(`🗑️ Borrando suscripción caducada: ${sub.id}`)
+                supabase.from('push_subscriptions').delete().match({ id: sub.id }).then()
+            }
+            return null // Retornamos null para filtrar fallos luego
+        })
+    })
 
-    console.log(`✅ Enviado con éxito a ${successCount} dispositivos`)
+    // Esperar a que todos terminen (con éxito o error)
+    const results = await Promise.all(promises)
+    const sentCount = results.filter(r => r !== null).length
 
-    return NextResponse.json({ success: true, sent: successCount })
+    console.log(`✅ Enviados correctamente: ${sentCount}/${subscribers.length}`)
+
+    return NextResponse.json({ success: true, count: sentCount })
 
   } catch (err: any) {
-    console.error("🔥 Error en envío masivo:", err);
+    console.error('🔥 Error Global Send:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
