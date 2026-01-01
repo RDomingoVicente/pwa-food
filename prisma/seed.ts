@@ -4,6 +4,19 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
+
+  console.log('🛠️ Aplicando permisos de base de datos...')
+  
+  // 1. 👇 AÑADE ESTO: Permisos para que Vercel/Supabase no se quejen de las secuencias (IDs)
+  try {
+    await prisma.$executeRawUnsafe(`GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO postgres, anon, authenticated, service_role;`)
+    await prisma.$executeRawUnsafe(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role;`)
+    await prisma.$executeRawUnsafe(`GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated, service_role;`)
+    console.log('✅ Permisos aplicados correctamente')
+  } catch (e) {
+    console.warn('⚠️ Aviso al aplicar permisos (puede que ya estén puestos):', e)
+  }
+  
   console.log('🌱 Empezando el seeding...')
   
   // 1. Limpiamos la base de datos para empezar de cero

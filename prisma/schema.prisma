@@ -26,7 +26,7 @@ model Product {
 }
 
 model PushSubscription {
-  id        String   @id @default(cuid())
+  id        Int      @id @default(autoincrement())
   endpoint  String   @unique // La URL única del navegador
   p256dh    String // Clave de encriptación 1
   auth      String // Clave de encriptación 2
