@@ -31,6 +31,7 @@ model PushSubscription {
   p256dh    String // Clave de encriptación 1
   auth      String // Clave de encriptación 2
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Es buena práctica mapear el nombre del modelo (CamelCase) 
   // al nombre de la tabla en la BD (snake_case)
