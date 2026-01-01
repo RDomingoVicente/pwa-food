@@ -22,7 +22,7 @@ export default function AdminSender() {
       const data = await res.json()
       
       if (data.success) {
-        setStatus(`✅ ¡Enviado a ${data.sent} personas!`)
+        setStatus(`✅ ¡Enviado a ${data.count} personas!`)
         setTitle('')   // Limpiar campos
         setMessage('')
       } else {
